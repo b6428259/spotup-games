@@ -126,18 +126,23 @@ export const initializeGame = async (roomId, players) => {
         });
 
         const initialState = {
-            state: 'playing',
-            currentTurn: 0,
-            currentPhase: 'initial',
-            players: players,
-            coins: players.reduce((acc, player) => ({ ...acc, [player]: 2 }), {}),
-            cards: playerCards,
-            deck: deck.slice(players.length * 2), // เก็บการ์ดที่เหลือไว้ในสำรับ
-            eliminatedPlayers: [],
-            lastActivity: serverTimestamp()
-        };
-
-        await set(ref(db, `rooms/${roomId}`), initialState);
+          state: 'playing',
+          currentTurn: 0,
+          currentPhase: 'initial',
+          players: players,
+          coins: players.reduce((acc, player) => ({ ...acc, [player]: 2 }), {}),
+          cards: playerCards,
+          deck: deck.slice(players.length * 2), // เก็บการ์ดที่เหลือไว้ในสำรับ
+          eliminatedPlayers: [],
+          challenger: null, // กำหนดให้เป็น null เริ่มต้น
+          challengedPlayer: null, // กำหนดให้เป็น null เริ่มต้น
+          claimedCard: null, // กำหนดให้เป็น null เริ่มต้น
+          challengeOutcome: null, // กำหนดให้เป็น null เริ่มต้น
+          lastActivity: serverTimestamp()
+      };
+      
+      await set(ref(db, `rooms/${roomId}`), initialState);
+      
         return true;
     } catch (error) {
         console.error("Error initializing game:", error);
@@ -145,23 +150,36 @@ export const initializeGame = async (roomId, players) => {
     }
 };
 export const performGameAction = async (roomId, action, player, target = null) => {
-    try {
-        const gameRef = ref(db, `rooms/${roomId}`);
-        const snapshot = await get(gameRef);
-        
-        if (snapshot.exists()) {
-            const gameData = snapshot.val();
-            // Implement game logic here based on the action
-            // Update game state accordingly
-            await set(gameRef, {
-                ...gameData,
-                lastActivity: serverTimestamp()
-            });
-            return true;
-        }
-        return false;
-    } catch (error) {
-        console.error("Error performing game action:", error);
-        throw error;
-    }
+  try {
+      const gameRef = ref(db, `rooms/${roomId}`);
+      const snapshot = await get(gameRef);
+
+      if (snapshot.exists()) {
+          const gameData = snapshot.val();
+          let updatedGameData = { ...gameData };
+          
+          // Logic for handling the challenge action
+          if (action === 'Challenge' && target) {
+              updatedGameData.challenger = player;
+              updatedGameData.challengedPlayer = target;
+              updatedGameData.claimedCard = 'someCard'; // ใส่การ์ดที่ผู้เล่นท้าทาย
+              updatedGameData.challengeOutcome = null; // ตั้งค่าผลลัพธ์ของการท้าทายเป็น null ก่อน
+
+              // Log the challenge action
+              const logMessage = `${player} ท้าทาย ${target} ว่ามีการ์ด ${updatedGameData.claimedCard}`;
+              await addGameLog(roomId, logMessage, 'action', player);
+          }
+
+          // อัปเดตข้อมูลเกม
+          await set(gameRef, {
+              ...updatedGameData,
+              lastActivity: serverTimestamp()
+          });
+          return true;
+      }
+      return false;
+  } catch (error) {
+      console.error("Error performing game action:", error);
+      throw error;
+  }
 };

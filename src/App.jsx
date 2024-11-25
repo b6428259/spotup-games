@@ -4,9 +4,11 @@ import GameSelect from './pages/GameSelect';
 import Coup from './pages/Coup/Coup';
 import Lobby from './pages/Lobby/Lobby';
 import CoupGame from './pages/Coup/Game/Game';
+import { GameProvider } from './pages/Coup/context/GameContext';
 
 function App() {
   return (
+    <GameProvider>
     <Router>
       <Routes>
         <Route path="/" element={<GameSelect />} />
@@ -15,6 +17,7 @@ function App() {
         <Route path="/game/:roomId" element={<CoupGame />} />
       </Routes>
     </Router>
+    </GameProvider>
   );
 }
 
