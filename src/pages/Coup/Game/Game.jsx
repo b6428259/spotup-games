@@ -4,13 +4,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ref, onValue, get, set, serverTimestamp } from 'firebase/database';
 import { db } from '../../../../firebase';
 import { motion } from 'framer-motion';
-import ChallengeModal from '../components/ChallengeModal';
+import ChallengeModal from '@/components/common/ChallengeModal';
 
 // Import Components
 import PlayerCard from '../components/PlayerCard.jsx';
 import GameLog from '../components/GameLog';
 import ActionButtonsContainer from '../components/ActionButtonsContainer';
 import InitialCardsModal from '../components/InitialCardsModal.jsx';
+import TargetSelectionModal from '../components/TargetSelectionModal';
 
 // Import Context
 import { useGame } from '../context/GameContext.jsx';
@@ -29,6 +30,10 @@ const Game = () => {
     const [playerName] = useState(localStorage.getItem('playerName'));
     const [showInitialCards, setShowInitialCards] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
+    const [showTargetModal, setShowTargetModal] = useState(false);
+    const [currentAction, setCurrentAction] = useState(null);
+    const [selectedTarget, setSelectedTarget] = useState(null);
+
 
     const {
         gameState,
@@ -48,7 +53,14 @@ const Game = () => {
         'Duke': DukeCard
     };
 
-    
+    const handleSelectTarget = (target) => {
+        setSelectedTarget(target);
+        setShowTargetModal(false);
+
+        // ดำเนินการต่อหลังจากเลือกเป้าหมาย
+        handleAction(currentAction, { targetPlayer: target });
+    };
+
 
     useEffect(() => {
         const roomRef = ref(db, `rooms/${roomId}`);
@@ -57,15 +69,15 @@ const Game = () => {
                 navigate('/');
                 return;
             }
-    
+
             const data = snapshot.val();
-            
+
             // Check if game is finished
             if (data.state === 'finished') {
                 navigate(`/lobby/${roomId}`);
                 return;
             }
-    
+
             setGameState(prevState => ({
                 ...prevState,
                 challenger: data.challenger || null,
@@ -80,10 +92,10 @@ const Game = () => {
                 currentPhase: data.currentPhase || 'initial',
                 eliminatedPlayers: data.eliminatedPlayers || []
             }));
-    
+
             setIsValidGame(data.state === 'playing');
         });
-    
+
         return () => unsubscribe();
     }, [roomId, navigate, setGameState, setIsValidGame]);
 
@@ -92,14 +104,14 @@ const Game = () => {
         try {
             const roomRef = ref(db, `rooms/${roomId}`);
             const snapshot = await get(roomRef);
-    
+
             if (snapshot.exists()) {
                 const currentGameState = snapshot.val();
                 const { challengedPlayer, claimedCard, cards } = currentGameState;
-    
+
                 const hasClaimedCard = cards[challengedPlayer].includes(claimedCard);
                 let logMessage = '';
-    
+
                 // Create updated game state
                 const updatedGameState = {
                     ...currentGameState,
@@ -109,27 +121,27 @@ const Game = () => {
                     claimedCard: null,
                     challengeOutcome: hasClaimedCard,
                 };
-    
+
                 // Handle card loss based on challenge outcome
                 const losingPlayer = hasClaimedCard ? playerName : challengedPlayer;
                 if (updatedGameState.cards[losingPlayer]) {
                     updatedGameState.cards[losingPlayer].pop();
                 }
-    
+
                 // Check for player elimination
                 updatedGameState.eliminatedPlayers = checkPlayerElimination(
-                    updatedGameState.cards, 
-                    losingPlayer, 
+                    updatedGameState.cards,
+                    losingPlayer,
                     currentGameState
                 );
-    
+
                 // Check for game end
                 const winner = checkGameEnd(
-                    updatedGameState.cards, 
-                    updatedGameState.players, 
+                    updatedGameState.cards,
+                    updatedGameState.players,
                     updatedGameState.eliminatedPlayers
                 );
-    
+
                 if (winner) {
                     // Game has ended
                     logMessage = `${winner} wins the game!`;
@@ -142,18 +154,18 @@ const Game = () => {
                     navigate(`/lobby/${roomId}`);
                 } else {
                     // Game continues
-                    updatedGameState.currentTurn = 
+                    updatedGameState.currentTurn =
                         (currentGameState.currentTurn + 1) % currentGameState.players.length;
-                    logMessage = hasClaimedCard ? 
+                    logMessage = hasClaimedCard ?
                         `${challengedPlayer} proves they have ${claimedCard}, ${playerName} loses a card` :
                         `${playerName} successfully challenges ${challengedPlayer}, who loses a card`;
-    
+
                     await set(roomRef, {
                         ...updatedGameState,
                         lastActivity: serverTimestamp()
                     });
                 }
-    
+
                 await addGameLog(roomId, logMessage, 'challenge', playerName);
                 setModalOpen(false);
             }
@@ -237,27 +249,28 @@ const Game = () => {
                         }
                         break;
                     case 'Steal':
-                        // เพิ่มสถานะ challenge สำหรับ Steal
                         if (challengeable) {
                             updatedGameState.currentPhase = 'challenge';
                             updatedGameState.challengedPlayer = playerName;
                             updatedGameState.claimedCard = 'Captain';
-                            logMessage = `${playerName} อ้างว่ามี Captain`;
+                            logMessage = `${playerName} อ้างว่ามี Captain เพื่อ Steal จาก ${targetPlayer}`;
                         } else {
-                            logMessage = `${playerName} พยายามขโมยเหรียญ`;
+                            updatedGameState.coins[playerName] += 2;
+                            updatedGameState.coins[targetPlayer] -= 2;
+                            logMessage = `${playerName} ขโมยเหรียญจาก ${targetPlayer}`;
                         }
                         break;
                     case 'Assassinate':
-                        // เพิ่มสถานะ challenge สำหรับ Assassinate
                         if (challengeable) {
                             updatedGameState.currentPhase = 'challenge';
                             updatedGameState.challengedPlayer = playerName;
                             updatedGameState.claimedCard = 'Assassin';
-                            updatedGameState.coins[playerName] = (updatedGameState.coins[playerName] || 0) - 3;
-                            logMessage = `${playerName} อ้างว่ามี Assassin`;
+                            updatedGameState.coins[playerName] -= 3;
+                            logMessage = `${playerName} อ้างว่ามี Assassin เพื่อสังหาร ${targetPlayer}`;
                         } else {
-                            updatedGameState.coins[playerName] = (updatedGameState.coins[playerName] || 0) - 3;
-                            logMessage = `${playerName} ใช้ Assassinate (-3 เหรียญ)`;
+                            updatedGameState.coins[playerName] -= 3;
+                            updatedGameState.cards[targetPlayer].pop(); // ลบการ์ดของเป้าหมาย
+                            logMessage = `${playerName} สังหารการ์ด 1 ใบของ ${targetPlayer}`;
                         }
                         break;
                     case 'Exchange':
@@ -268,6 +281,11 @@ const Game = () => {
                             updatedGameState.claimedCard = 'Ambassador';
                             logMessage = `${playerName} อ้างว่ามี Ambassador`;
                         }
+                        break;
+                    case 'Coup':
+                        updatedGameState.coins[playerName] -= 7;
+                        updatedGameState.cards[targetPlayer].pop(); // ลบการ์ดของเป้าหมาย
+                        logMessage = `${playerName} ใช้ Coup กับ ${targetPlayer}`;
                         break;
                     case 'Challenge':
                         console.log("Processing challenge from", playerName);
@@ -322,12 +340,12 @@ const Game = () => {
 
     const checkGameEnd = (cards, players, eliminatedPlayers) => {
         // Count players still in game (have cards)
-        const playersWithCards = players.filter(player => 
-            !eliminatedPlayers.includes(player) && 
-            cards[player] && 
+        const playersWithCards = players.filter(player =>
+            !eliminatedPlayers.includes(player) &&
+            cards[player] &&
             cards[player].length > 0
         );
-    
+
         return playersWithCards.length === 1 ? playersWithCards[0] : null;
     };
 
@@ -363,6 +381,7 @@ const Game = () => {
                         <PlayerCard
                             key={player}
                             player={player}
+                            isTargeted={player === selectedTarget} // เพิ่มเงื่อนไขแสดงเป้าหมาย
                             index={index}
                             isCurrentPlayer={player === playerName}
                             isCurrentTurn={index === gameState.currentTurn}
@@ -379,8 +398,12 @@ const Game = () => {
                     isCurrentPlayerTurn={gameState.players[gameState.currentTurn] === playerName}
                     playerCoins={gameState.coins[playerName] || 0}
                     onActionSelect={handleAction}
-                    gameState={gameState} // เพิ่มส่วนนี้
+                    setCurrentAction={setCurrentAction} // Pass setCurrentAction here
+                    setShowTargetModal={setShowTargetModal} // Pass setShowTargetModal here
+                    gameState={gameState}
                 />
+
+
 
                 {/* Game Log */}
                 <GameLog logs={gameLogs} />
@@ -388,19 +411,28 @@ const Game = () => {
 
             {/* Initial Cards Modal */}
             <InitialCardsModal
-                showInitialCards={showInitialCards}
+                isOpen={showInitialCards}
+                onOpenChange={setShowInitialCards}
                 playerCards={gameState.cards[playerName]}
                 cardImages={cardImages}
-                onClose={() => setShowInitialCards(false)}
+                backCard={BackCard}
             />
             <ChallengeModal
                 isOpen={modalOpen}
-                challenger={gameState.challenger}
+                onOpenChange={setModalOpen}
                 challengedPlayer={gameState.challengedPlayer}
                 claimedCard={gameState.claimedCard}
                 onConfirm={handleChallenge}
                 onSkip={handleSkipChallenge}
             />
+            <TargetSelectionModal
+                isOpen={showTargetModal}
+                players={gameState.players}
+                excludedPlayer={playerName}
+                onSelectTarget={handleSelectTarget}
+                onClose={() => setShowTargetModal(false)}
+            />
+
 
         </motion.div>
     );

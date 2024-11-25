@@ -9,14 +9,20 @@ import Assassin from '../../../assets/coup/Assassin.jpg';
 import Ambassador from '../../../assets/coup/Ambassador.jpg';
 import Captain from '../../../assets/coup/Captain.jpg';
 
+import { useState } from 'react';
+
 // components/ActionButtonsContainer.jsx
 const ActionButtonsContainer = ({ 
     isCurrentPlayerTurn, 
     playerCoins, 
     onActionSelect,
-    gameState
+    gameState,
+    setCurrentAction,
+    setShowTargetModal
 }) => {
     const currentPlayer = localStorage.getItem('playerName');
+    const [showTargetModal, setShowTargetModalState] = useState(false);
+
     
     const actions = [
         { 
@@ -75,15 +81,18 @@ const ActionButtonsContainer = ({
     ];
 
     const handleActionSelect = (action) => {
-        if (action.challengeable) {
-            // ส่งข้อมูลการ action ที่สามารถ challenge ได้
+        if (['Steal', 'Assassinate', 'Coup'].includes(action.name)) {
+            setCurrentAction(action.name); // Save the selected action
+            setShowTargetModal(true); // Show the modal to select a target
+        } else if (action.challengeable) {
+            // Send action data if it's challengeable
             onActionSelect(action.name, {
-                targetPlayer: gameState.players[gameState.currentTurn], // เพิ่ม targetPlayer
-                claimedCard: action.character, // เพิ่ม claimedCard
+                targetPlayer: gameState.players[gameState.currentTurn], // Add targetPlayer
+                claimedCard: action.character, // Add claimedCard
                 challengeable: true
             });
         } else {
-            // ส่ง action ปกติ
+            // Send the action normally
             onActionSelect(action.name);
         }
     };

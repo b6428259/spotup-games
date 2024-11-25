@@ -1,54 +1,95 @@
-// components/InitialCardsModal.jsx
-import { motion } from 'framer-motion';
+import React, { useState } from 'react'
+import BaseModal from '@/components/common/BaseModal'
+import { Button } from '@/components/ui/button'
+import { motion } from 'framer-motion'
+import '../../../components/common/global.css'
 
-const InitialCardsModal = ({ 
-    showInitialCards, 
-    playerCards, 
-    cardImages, 
-    onClose 
+const CardReveal = ({ card, cardImage, backCard }) => {
+  const [isHovered, setIsHovered] = useState(false)
+
+  return (
+    <motion.div 
+      className="relative w-32 h-48 cursor-pointer preserve-3d"
+      style={{ perspective: '1000px' }}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
+    >
+      <motion.div
+        className="w-full h-full absolute backface-hidden"
+        animate={{ 
+          rotateY: isHovered ? 180 : 0,
+        }}
+        transition={{ duration: 0.6 }}
+      >
+        <img
+          src={backCard}
+          alt="Card Back"
+          className="w-full h-full object-cover rounded-lg"
+        />
+      </motion.div>
+      <motion.div
+        className="w-full h-full absolute backface-hidden"
+        initial={{ rotateY: -180 }}
+        animate={{ 
+          rotateY: isHovered ? 0 : -180,
+        }}
+        transition={{ duration: 0.6 }}
+      >
+        <img
+          src={cardImage}
+          alt={card}
+          className="w-full h-full object-cover rounded-lg"
+        />
+        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2 text-center">
+          {card}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+const InitialCardsModal = ({
+  isOpen,
+  onOpenChange,
+  playerCards = [],
+  cardImages,
+  backCard, // รับ prop backCard เพิ่มเติม
 }) => {
-    if (!showInitialCards || !playerCards) return null;
+  if (!playerCards?.length) return null
 
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-        >
-            <motion.div
-                initial={{ scale: 0.5 }}
-                animate={{ scale: 1 }}
-                className="bg-gray-800 p-6 rounded-xl text-center"
-            >
-                <h2 className="text-2xl text-white mb-4">Your Initial Cards</h2>
-                <div className="flex gap-4 justify-center mb-6">
-                    {playerCards.map((card, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ rotateY: 180 }}
-                            animate={{ rotateY: 0 }}
-                            transition={{ delay: index * 0.5 }}
-                            className="relative w-32 h-48"
-                        >
-                            <img 
-                                src={cardImages[card]}
-                                alt={card}
-                                className="w-full h-full rounded-lg object-cover"
-                            />
-                        </motion.div>
-                    ))}
-                </div>
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={onClose}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg"
-                >
-                    Start Playing
-                </motion.button>
-            </motion.div>
-        </motion.div>
-    );
-};
+  return (
+    <BaseModal
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Your Initial Cards"
+      className="sm:max-w-[500px]"
+    >
+      <div className="flex flex-col gap-6">
+        <div className="text-center space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Hover over cards to reveal them. Keep them secret!
+          </p>
+          
+          <div className="flex justify-center gap-4">
+            {playerCards.map((card, index) => (
+              <CardReveal
+                key={`${card}-${index}`}
+                card={card}
+                cardImage={cardImages[card]}
+                backCard={backCard}
+              />
+            ))}
+          </div>
+        </div>
 
-export default InitialCardsModal;
+        <div className="flex justify-center">
+          <Button onClick={() => onOpenChange(false)}>
+            Start Playing
+          </Button>
+        </div>
+      </div>
+    </BaseModal>
+  )
+}
+
+export default InitialCardsModal
